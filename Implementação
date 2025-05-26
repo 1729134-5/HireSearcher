@@ -1,0 +1,14 @@
+# Registrar usuário
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"name": "João", "email": "joao@ex.com"}' \
+  http://localhost:5000/user/register
+
+# Fazer upload do currículo (texto)
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"text": "Experienced Python developer with Flask and SQL."}' \
+  http://localhost:5000/resume/upload
+
+# Receber recomendações de vaga com base nas skills extraídas
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"skills": ["Python"]}' \
+  http://localhost:5000/jobs/recommendations
