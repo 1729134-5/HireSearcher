@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>HireSearcher - Teste de API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        textarea { width: 100%; height: 150px; margin-bottom: 10px; }
+        input, button { padding: 8px; margin-top: 5px; }
+        .result { margin-top: 20px; white-space: pre-wrap; background: #f4f4f4; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>HireSearcher</h1>
+
+    <h2>1. Enviar currículo</h2>
+    <textarea id="resumeText" placeholder="Cole aqui seu currículo em texto..."></textarea>
+    <button onclick="uploadResume()">Enviar Currículo</button>
+    <div><strong>Resume ID:</strong> <span id="resumeId"></span></div>
+
+    <h2>2. Buscar vagas compatíveis</h2>
+    <input type="text" id="resumeIdInput" placeholder="Cole aqui o Resume ID" style="width: 100%;">
+    <button onclick="searchJobs()">Buscar Vagas</button>
+
+    <div class="result" id="resultArea"></div>
+
+    <script>
+        async function uploadResume() {
+            const text = document.getElementById("resumeText").value;
+            const resultArea = document.getElementById("resultArea");
+            resultArea.innerText = "Enviando currículo...";
+
+            try {
+                const response = await fetch("http://127.0.0.1:5000/resume/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text })
+                });
+
+                const raw = await response.text(); // Lê a resposta como texto
+
+                try {
+                    const data = JSON.parse(raw);
+                    if (response.ok) {
+                        document.getElementById("resumeId").innerText = data.resume_id || "Erro";
+                        document.getElementById("resumeIdInput").value = data.resume_id || "";
+                    } else {
+                        document.getElementById("resumeId").innerText = "Erro";
+                    }
+                    resultArea.innerText = `Código HTTP: ${response.status}\nResposta:\n${JSON.stringify(data, null, 2)}`;
+                } catch (parseErr) {
+                    resultArea.innerText = `Código HTTP: ${response.status}\nResposta (não JSON):\n${raw}`;
+                }
+
+            } catch (e) {
+                resultArea.innerText = "Erro de conexão ou servidor fora do ar:\n" + e;
+            }
+        }
+
+        async function searchJobs() {
+            const resume_id = document.getElementById("resumeIdInput").value;
+            const resultArea = document.getElementById("resultArea");
+            resultArea.innerText = "Buscando vagas...";
+
+            try {
+                const response = await fetch("http://127.0.0.1:5000/jobs/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ resume_id })
+                });
+
+                const raw = await response.text();
+
+                try {
+                    const data = JSON.parse(raw);
+                    resultArea.innerText = `Código HTTP: ${response.status}\nResposta:\n${JSON.stringify(data, null, 2)}`;
+                } catch (parseErr) {
+                    resultArea.innerText = `Código HTTP: ${response.status}\nResposta (não JSON):\n${raw}`;
+                }
+
+            } catch (e) {
+                resultArea.innerText = "Erro de conexão ou servidor fora do ar:\n" + e;
+            }
+        }
+    </script>
+</body>
+</html>

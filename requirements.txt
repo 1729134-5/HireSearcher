@@ -3,3 +3,5 @@ Requests
 Python-dotenv
 Numpy
 Flask-cors
+openai
+keybert
