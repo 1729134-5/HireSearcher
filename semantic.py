@@ -1,14 +1,12 @@
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
-# Carrega o modelo local (isso faz download apenas na primeira vez)
+# Carrega o modelo local
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
 def get_embeddings(texts):
     """
     Gera embeddings localmente usando o modelo all-MiniLM-L6-v2.
-    texts: lista de strings
-    return: lista de vetores (floats)
     """
     if isinstance(texts, str):
         texts = [texts]
