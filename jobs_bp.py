@@ -7,10 +7,9 @@ from itertools import combinations
 
 jobs_bp = Blueprint('jobs_bp', __name__, url_prefix='/jobs')
 
-# Cache simples em memória para resultados por termo combinado
+# Cache em memória para resultados por termo combinado
 job_cache = {}
 
-# --- Limpa tags HTML da descrição das vagas ---
 class HTMLTextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -31,9 +30,8 @@ def clean_html(raw_html):
 def search_remotive_jobs(keywords):
     """
     Busca vagas do Remotive com base em combinações prioritárias de palavras-chave.
-    Começa com todas as combinações de 5 termos, depois 4, até 1.
+    Começa com todas as combinações de 3 termos, depois 2, até 1.
     """
-    # Extrai termos simples e únicos
     terms = set()
     for phrase in keywords:
         for word in phrase.lower().split():
@@ -80,7 +78,7 @@ def search_remotive_jobs(keywords):
             job_cache[term] = result
             jobs += result
             if jobs:
-                break  # para no primeiro sucesso individual
+                break
         except Exception as e:
             print(f"❌ Erro ao buscar '{term}': {e}")
 
@@ -103,7 +101,7 @@ def search_remotive_jobs(keywords):
             job_cache[term] = result
             jobs += result
             if jobs:
-                break  # para após primeiro sucesso
+                break
         except Exception as e:
             print(f"❌ Erro ao buscar '{term}': {e}")
 
@@ -140,13 +138,12 @@ def find_jobs():
     except Exception as e:
         return jsonify({"error": f"Falha ao gerar embeddings das vagas: {e}"}), 500
 
-    # Calcula similaridade semântica entre currículo e vagas
     scored = []
     for job, emb in zip(jobs, job_embeddings):
         score = cosine_similarity(resume_embedding, emb)
         scored.append((score, job))
 
-    # Ordena e retorna as 3 mais similares
+    # Ordena e retorna as vagas mais similares
     scored.sort(key=lambda x: x[0], reverse=True)
     top3 = scored[:3]
 
