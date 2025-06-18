@@ -1,87 +1,137 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <title>HireSearcher - Teste de API</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        textarea { width: 100%; height: 150px; margin-bottom: 10px; }
-        input, button { padding: 8px; margin-top: 5px; }
-        .result { margin-top: 20px; white-space: pre-wrap; background: #f4f4f4; padding: 10px; border-radius: 5px; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>HireSearcher</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    textarea {
+      width: 100%;
+      height: 180px;
+      padding: 10px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    button {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background-color: #2e86de;
+      color: white;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    button:hover {
+      background-color: #1e5fa5;
+    }
+    .status {
+      margin: 15px 0;
+      font-style: italic;
+      color: #555;
+    }
+    .job-card {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      background-color: #f9f9f9;
+    }
+    .job-card h3 {
+      margin: 0 0 5px;
+    }
+    .job-card p {
+      margin: 4px 0;
+    }
+    .job-card .score {
+      font-weight: bold;
+      color: #2e86de;
+    }
+  </style>
 </head>
 <body>
-    <h1>HireSearcher</h1>
+  <h1>HireSearcher</h1>
 
-    <h2>1. Enviar currículo</h2>
-    <textarea id="resumeText" placeholder="Cole aqui seu currículo em texto..."></textarea>
-    <button onclick="uploadResume()">Enviar Currículo</button>
-    <div><strong>Resume ID:</strong> <span id="resumeId"></span></div>
+  <textarea id="resumeText" placeholder="Cole aqui seu currículo em texto..."></textarea>
+  <button onclick="submitAndSearch()">Enviar currículo e buscar vagas</button>
 
-    <h2>2. Buscar vagas compatíveis</h2>
-    <input type="text" id="resumeIdInput" placeholder="Cole aqui o Resume ID" style="width: 100%;">
-    <button onclick="searchJobs()">Buscar Vagas</button>
+  <div class="status" id="status"></div>
+  <div id="resultArea"></div>
 
-    <div class="result" id="resultArea"></div>
+  <script>
+    async function submitAndSearch() {
+      const resumeText = document.getElementById("resumeText").value;
+      const status = document.getElementById("status");
+      const resultArea = document.getElementById("resultArea");
 
-    <script>
-        async function uploadResume() {
-            const text = document.getElementById("resumeText").value;
-            const resultArea = document.getElementById("resultArea");
-            resultArea.innerText = "Enviando currículo...";
+      if (!resumeText.trim()) {
+        status.innerText = "Por favor, insira seu currículo antes de enviar.";
+        return;
+      }
 
-            try {
-                const response = await fetch("http://127.0.0.1:5000/resume/", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ text })
-                });
+      status.innerText = "Enviando currículo...";
+      resultArea.innerHTML = "";
 
-                const raw = await response.text(); // Lê a resposta como texto
+      // 1. Envia o currículo
+      let resume_id = "";
+      try {
+        const res = await fetch("http://127.0.0.1:5000/resume/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: resumeText })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.resume_id) {
+          status.innerText = "Erro ao enviar currículo.";
+          return;
+        }
+        resume_id = data.resume_id;
+        status.innerText = "Currículo enviado com sucesso. Buscando vagas...";
+      } catch (e) {
+        status.innerText = "Erro ao enviar currículo.";
+        return;
+      }
 
-                try {
-                    const data = JSON.parse(raw);
-                    if (response.ok) {
-                        document.getElementById("resumeId").innerText = data.resume_id || "Erro";
-                        document.getElementById("resumeIdInput").value = data.resume_id || "";
-                    } else {
-                        document.getElementById("resumeId").innerText = "Erro";
-                    }
-                    resultArea.innerText = `Código HTTP: ${response.status}\nResposta:\n${JSON.stringify(data, null, 2)}`;
-                } catch (parseErr) {
-                    resultArea.innerText = `Código HTTP: ${response.status}\nResposta (não JSON):\n${raw}`;
-                }
+      // 2. Busca vagas
+      try {
+        const res = await fetch("http://127.0.0.1:5000/jobs/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume_id })
+        });
+        const data = await res.json();
 
-            } catch (e) {
-                resultArea.innerText = "Erro de conexão ou servidor fora do ar:\n" + e;
-            }
+        if (!res.ok || !data.jobs || data.jobs.length === 0) {
+          status.innerText = "Nenhuma vaga compatível encontrada.";
+          return;
         }
 
-        async function searchJobs() {
-            const resume_id = document.getElementById("resumeIdInput").value;
-            const resultArea = document.getElementById("resultArea");
-            resultArea.innerText = "Buscando vagas...";
+        status.innerText = `Encontradas ${data.jobs.length} vagas compatíveis:`;
 
-            try {
-                const response = await fetch("http://127.0.0.1:5000/jobs/", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ resume_id })
-                });
+        resultArea.innerHTML = data.jobs.map(job => `
+          <div class="job-card">
+            <h3>${job.title}</h3>
+            <p><strong>Empresa:</strong> ${job.company}</p>
+            <p><strong>Localização:</strong> ${job.location}</p>
+            <p><strong>Similaridade:</strong> <span class="score">${job.similarity}</span></p>
+            <p><strong>Descrição:</strong><br>${job.description}</p>
+          </div>
+        `).join("");
 
-                const raw = await response.text();
-
-                try {
-                    const data = JSON.parse(raw);
-                    resultArea.innerText = `Código HTTP: ${response.status}\nResposta:\n${JSON.stringify(data, null, 2)}`;
-                } catch (parseErr) {
-                    resultArea.innerText = `Código HTTP: ${response.status}\nResposta (não JSON):\n${raw}`;
-                }
-
-            } catch (e) {
-                resultArea.innerText = "Erro de conexão ou servidor fora do ar:\n" + e;
-            }
-        }
-    </script>
+      } catch (e) {
+        status.innerText = "Erro ao buscar vagas.";
+      }
+    }
+  </script>
 </body>
 </html>

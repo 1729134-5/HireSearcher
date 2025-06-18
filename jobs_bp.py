@@ -30,7 +30,7 @@ def clean_html(raw_html):
 def search_remotive_jobs(keywords):
     """
     Busca vagas do Remotive com base em combinações prioritárias de palavras-chave.
-    Começa com todas as combinações de 3 termos, depois 2, até 1.
+    Gera combinações de 3, 2 e 1 palavra, acumulando resultados até ter pelo menos 5 vagas únicas.
     """
     terms = set()
     for phrase in keywords:
@@ -42,71 +42,37 @@ def search_remotive_jobs(keywords):
     if not terms:
         return []
 
-    # Tenta combinações do maior para o menor
-    for size in range(min(5, len(terms)), 0, -1):
+    seen_ids = set()
+    jobs = []
+
+    for size in range(min(2, len(terms)), 0, -1):
         combos = combinations(terms, size)
         for combo in combos:
             query = " ".join(combo)
             if query in job_cache:
                 print(f"📦 Cache: {query}")
-                return job_cache[query]
+                new_jobs = job_cache[query]
+            else:
+                print(f"🔍 Buscando combinação: {query}")
+                try:
+                    resp = requests.get("https://remotive.com/api/remote-jobs", params={"search": query})
+                    resp.raise_for_status()
+                    new_jobs = resp.json().get("jobs", [])
+                    job_cache[query] = new_jobs
+                except Exception as e:
+                    print(f"❌ Erro ao buscar para '{query}': {e}")
+                    continue
 
-            print(f"🔍 Buscando combinação: {query}")
-            try:
-                resp = requests.get("https://remotive.com/api/remote-jobs", params={"search": query})
-                resp.raise_for_status()
-                jobs = resp.json().get("jobs", [])
-                if jobs:
-                    job_cache[query] = jobs
-                    return jobs
-            except Exception as e:
-                print(f"❌ Erro ao buscar para '{query}': {e}")
+            for job in new_jobs:
+                job_id = job.get("id") or job.get("url") or job.get("title") + job.get("company_name", "")
+                if job_id not in seen_ids:
+                    jobs.append(job)
+                    seen_ids.add(job_id)
 
-    print("⚠️ Nenhuma combinação funcionou. Tentando termos individualmente...")
-
-    jobs = []
-    for term in terms:
-        if term in job_cache:
-            jobs += job_cache[term]
-            continue
-
-        print(f"🔹 Buscando individualmente: {term}")
-        try:
-            resp = requests.get("https://remotive.com/api/remote-jobs", params={"search": term})
-            resp.raise_for_status()
-            result = resp.json().get("jobs", [])
-            job_cache[term] = result
-            jobs += result
-            if jobs:
-                break
-        except Exception as e:
-            print(f"❌ Erro ao buscar '{term}': {e}")
+            if len(jobs) >= 5:
+                return jobs
 
     return jobs
-
-
-    # Fallback final: termos individualmente
-    print("⚠️ Nenhuma combinação deu resultado. Tentando termos individualmente...")
-    jobs = []
-    for term in terms:
-        if term in job_cache:
-            jobs += job_cache[term]
-            continue
-
-        print(f"🔹 Buscando individualmente: {term}")
-        try:
-            resp = requests.get("https://remotive.com/api/remote-jobs", params={"search": term})
-            resp.raise_for_status()
-            result = resp.json().get("jobs", [])
-            job_cache[term] = result
-            jobs += result
-            if jobs:
-                break
-        except Exception as e:
-            print(f"❌ Erro ao buscar '{term}': {e}")
-
-    return jobs
-
 
 @jobs_bp.route('/', methods=['POST'])
 def find_jobs():
@@ -145,10 +111,10 @@ def find_jobs():
 
     # Ordena e retorna as vagas mais similares
     scored.sort(key=lambda x: x[0], reverse=True)
-    top3 = scored[:3]
+    top5 = scored[:5]
 
     result = []
-    for score, job in top3:
+    for score, job in top5:
         result.append({
             "title": job.get("title"),
             "company": job.get("company_name"),
