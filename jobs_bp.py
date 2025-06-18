@@ -4,6 +4,7 @@ from semantic import get_embeddings, cosine_similarity
 from resume_bp import resumes
 from html.parser import HTMLParser
 from itertools import combinations
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 jobs_bp = Blueprint('jobs_bp', __name__, url_prefix='/jobs')
 
@@ -27,10 +28,26 @@ def clean_html(raw_html):
     text = parser.get_text()
     return text.replace('\n', '<br>')
 
+def fetch_jobs(query):
+    if query in job_cache:
+        print(f"📦 Cache: {query}")
+        return query, job_cache[query]
+
+    print(f"🔍 Buscando: {query}")
+    try:
+        resp = requests.get("https://remotive.com/api/remote-jobs", params={"search": query})
+        resp.raise_for_status()
+        jobs = resp.json().get("jobs", [])
+        job_cache[query] = jobs
+        return query, jobs
+    except Exception as e:
+        print(f"❌ Erro para '{query}': {e}")
+        return query, []
+
 def search_remotive_jobs(keywords):
     """
-    Busca vagas do Remotive com base em combinações prioritárias de palavras-chave.
-    Gera combinações de 3, 2 e 1 palavra, acumulando resultados até ter pelo menos 5 vagas únicas.
+    Busca vagas do Remotive com base em combinações de palavras-chave.
+    Executa buscas em paralelo e acumula até 5 resultados únicos.
     """
     terms = set()
     for phrase in keywords:
@@ -45,32 +62,23 @@ def search_remotive_jobs(keywords):
     seen_ids = set()
     jobs = []
 
-    for size in range(min(2, len(terms)), 0, -1):
-        combos = combinations(terms, size)
-        for combo in combos:
-            query = " ".join(combo)
-            if query in job_cache:
-                print(f"📦 Cache: {query}")
-                new_jobs = job_cache[query]
-            else:
-                print(f"🔍 Buscando combinação: {query}")
-                try:
-                    resp = requests.get("https://remotive.com/api/remote-jobs", params={"search": query})
-                    resp.raise_for_status()
-                    new_jobs = resp.json().get("jobs", [])
-                    job_cache[query] = new_jobs
-                except Exception as e:
-                    print(f"❌ Erro ao buscar para '{query}': {e}")
-                    continue
+    # Gera combinações de 3, 2 e 1 termo
+    queries = []
+    for size in range(min(3, len(terms)), 0, -1):
+        queries += [" ".join(combo) for combo in combinations(terms, size)]
 
+    # Executa buscas em paralelo
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = [executor.submit(fetch_jobs, q) for q in queries]
+        for future in as_completed(futures):
+            query, new_jobs = future.result()
             for job in new_jobs:
                 job_id = job.get("id") or job.get("url") or job.get("title") + job.get("company_name", "")
                 if job_id not in seen_ids:
                     jobs.append(job)
                     seen_ids.add(job_id)
-
             if len(jobs) >= 5:
-                return jobs
+                break
 
     return jobs
 
@@ -109,7 +117,7 @@ def find_jobs():
         score = cosine_similarity(resume_embedding, emb)
         scored.append((score, job))
 
-    # Ordena e retorna as vagas mais similares
+    # Ordena por similaridade e retorna até 5 mais relevantes
     scored.sort(key=lambda x: x[0], reverse=True)
     top5 = scored[:5]
 
